@@ -87,7 +87,7 @@ void VulkanEngine::initialize(SDL_Window* window, uint32_t windowWidth, uint32_t
         // Step 6: Create graphics pipeline
         logInitializationState(InitializationState::PIPELINE_CREATED, "Creating graphics pipeline");
         m_pipeline.createGraphicsPipeline(m_device.getLogicalDevice(), m_renderPass.getRenderPass(), 
-                         "build/shaders/vertex.vert.spv", "build/shaders/fragment.frag.spv", m_swapchain.getExtent());
+                         "shaders/vertex.vert.spv", "shaders/fragment.frag.spv", m_swapchain.getExtent());
         m_initState = InitializationState::PIPELINE_CREATED;
         
         // Step 6.5: Create descriptor sets using the pipeline's layout
@@ -672,7 +672,7 @@ void VulkanEngine::recreateSwapchain() {
     
     // Recreate pipeline
     m_pipeline.createGraphicsPipeline(m_device.getLogicalDevice(), m_renderPass.getRenderPass(),
-                     "build/shaders/vertex.vert.spv", "build/shaders/fragment.frag.spv", m_swapchain.getExtent());
+                     "shaders/vertex.vert.spv", "shaders/fragment.frag.spv", m_swapchain.getExtent());
     
     LOG_INFO("Swapchain recreated successfully", "Engine");
 }
