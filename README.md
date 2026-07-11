@@ -1,5 +1,3 @@
-# Echo Protocol
-
 A Vulkan + SDL3 C++ example project demonstrating basic graphics API integration and modern C++ development practices.
 
 ## Features
