@@ -14,7 +14,7 @@ VulkanSynchronization::~VulkanSynchronization() {
     cleanup();
 }
 
-void VulkanSynchronization::create(VkDevice device, uint32_t maxFramesInFlight) {
+void VulkanSynchronization::create(VkDevice device, uint32_t maxFramesInFlight, uint32_t swapchainImageCount) {
     m_device = device;
     m_maxFramesInFlight = maxFramesInFlight;
     
@@ -28,22 +28,46 @@ void VulkanSynchronization::create(VkDevice device, uint32_t maxFramesInFlight) 
     for (uint32_t i = 0; i < maxFramesInFlight; i++) {
         std::string frameStr = "Frame " + std::to_string(i);
         
-        // Create semaphores for this frame
+        // Create semaphore for image availability
         m_frameSyncObjects[i].imageAvailableSemaphore = 
             createSemaphoreInternal(device, frameStr + " Image Available");
         
+        // Retain fallback in frameSyncObjects for compatibility
         m_frameSyncObjects[i].renderFinishedSemaphore = 
-            createSemaphoreInternal(device, frameStr + " Render Finished");
+            createSemaphoreInternal(device, frameStr + " Render Finished (Fallback)");
         
         // Create fence for this frame (start in signaled state so first frame doesn't wait)
         m_frameSyncObjects[i].inFlightFence = 
             createFenceInternal(device, true, frameStr + " In Flight");
     }
     
+    // Create separate render finished semaphores per swapchain image to ensure safe reuse
+    // (fixes validation warning/error on swapchain semaphore reuse)
+    uint32_t imageCount = (swapchainImageCount > 0) ? swapchainImageCount : maxFramesInFlight;
+    recreateSwapchainSemaphores(imageCount);
+    
     std::cout << "Successfully created synchronization objects for " << maxFramesInFlight 
-              << " frames in flight\n";
-    std::cout << "  - Total semaphores: " << (maxFramesInFlight * 2) << "\n";
+              << " frames in flight and " << imageCount << " swapchain images\n";
+    std::cout << "  - Image available semaphores: " << maxFramesInFlight << "\n";
+    std::cout << "  - Render finished semaphores: " << m_renderFinishedSemaphores.size() << "\n";
     std::cout << "  - Total fences: " << maxFramesInFlight << "\n";
+}
+
+void VulkanSynchronization::recreateSwapchainSemaphores(uint32_t swapchainImageCount) {
+    // Destroy any existing per-image semaphores
+    for (auto& semaphore : m_renderFinishedSemaphores) {
+        if (semaphore != VK_NULL_HANDLE) {
+            vkDestroySemaphore(m_device, semaphore, nullptr);
+            semaphore = VK_NULL_HANDLE;
+        }
+    }
+    m_renderFinishedSemaphores.clear();
+    
+    m_renderFinishedSemaphores.resize(swapchainImageCount);
+    for (uint32_t i = 0; i < swapchainImageCount; i++) {
+        m_renderFinishedSemaphores[i] = createSemaphoreInternal(
+            m_device, "Swapchain Image " + std::to_string(i) + " Render Finished");
+    }
 }
 
 bool VulkanSynchronization::waitForFrame(uint32_t frameIndex, uint64_t timeout) {
@@ -234,6 +258,18 @@ void VulkanSynchronization::cleanup() {
             m_frameSyncObjects.clear();
         }
         
+        // Clean up per-swapchain-image render finished semaphores
+        for (auto& semaphore : m_renderFinishedSemaphores) {
+            if (semaphore != VK_NULL_HANDLE) {
+                vkDestroySemaphore(m_device, semaphore, nullptr);
+            }
+        }
+        if (!m_renderFinishedSemaphores.empty()) {
+            VulkanUtils::logObjectDestruction("RenderFinishedSemaphores",
+                "Destroyed " + std::to_string(m_renderFinishedSemaphores.size()) + " render finished semaphores");
+            m_renderFinishedSemaphores.clear();
+        }
+        
         // Clean up manually created semaphores
         for (VkSemaphore semaphore : m_semaphores) {
             if (semaphore != VK_NULL_HANDLE) {
@@ -274,8 +310,16 @@ VkSemaphore VulkanSynchronization::getImageAvailableSemaphore(uint32_t frameInde
     return getFrameSyncObjects(frameIndex).imageAvailableSemaphore;
 }
 
-VkSemaphore VulkanSynchronization::getRenderFinishedSemaphore(uint32_t frameIndex) const {
-    return getFrameSyncObjects(frameIndex).renderFinishedSemaphore;
+VkSemaphore VulkanSynchronization::getRenderFinishedSemaphore(uint32_t index) const {
+    if (!m_renderFinishedSemaphores.empty()) {
+        if (index >= m_renderFinishedSemaphores.size()) {
+            throw std::runtime_error("Render finished semaphore index out of range: " + 
+                                   std::to_string(index) + " >= " + 
+                                   std::to_string(m_renderFinishedSemaphores.size()));
+        }
+        return m_renderFinishedSemaphores[index];
+    }
+    return getFrameSyncObjects(index).renderFinishedSemaphore;
 }
 
 VkFence VulkanSynchronization::getInFlightFence(uint32_t frameIndex) const {

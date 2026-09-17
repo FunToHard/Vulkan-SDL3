@@ -111,7 +111,11 @@ void VulkanEngine::initialize(SDL_Window* window, uint32_t windowWidth, uint32_t
         
         // Step 9: Create synchronization objects
         logInitializationState(InitializationState::SYNCHRONIZATION_CREATED, "Creating synchronization objects");
-        m_synchronization.create(m_device.getLogicalDevice(), MAX_FRAMES_IN_FLIGHT);
+        m_synchronization.create(
+            m_device.getLogicalDevice(), 
+            MAX_FRAMES_IN_FLIGHT, 
+            static_cast<uint32_t>(m_swapchain.getImageViews().size())
+        );
         m_initState = InitializationState::SYNCHRONIZATION_CREATED;
         
         // Step 10: Load main character
@@ -202,7 +206,7 @@ void VulkanEngine::render() {
         // Submit command buffer
         std::vector<VkSemaphore> waitSemaphores = {m_synchronization.getImageAvailableSemaphore(m_currentFrame)};
         std::vector<VkPipelineStageFlags> waitStages = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        std::vector<VkSemaphore> signalSemaphores = {m_synchronization.getRenderFinishedSemaphore(m_currentFrame)};
+        std::vector<VkSemaphore> signalSemaphores = {m_synchronization.getRenderFinishedSemaphore(imageIndex)};
         
         m_synchronization.submitCommandBuffers(
             m_device.getGraphicsQueue(),
@@ -673,6 +677,9 @@ void VulkanEngine::recreateSwapchain() {
     // Recreate pipeline
     m_pipeline.createGraphicsPipeline(m_device.getLogicalDevice(), m_renderPass.getRenderPass(),
                      "shaders/vertex.vert.spv", "shaders/fragment.frag.spv", m_swapchain.getExtent());
+    
+    // Recreate presentation semaphores to match new swapchain image count
+    m_synchronization.recreateSwapchainSemaphores(static_cast<uint32_t>(m_swapchain.getImageViews().size()));
     
     LOG_INFO("Swapchain recreated successfully", "Engine");
 }

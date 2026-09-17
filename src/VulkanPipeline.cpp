@@ -93,8 +93,20 @@ void VulkanPipeline::createGraphicsPipeline(VkDevice device,
     pipelineInfo.pRasterizationState = &rasterizationInfo;  // Rasterization settings
     pipelineInfo.pMultisampleState = &multisampleInfo;      // Anti-aliasing settings
     pipelineInfo.pDepthStencilState = &depthStencilInfo;    // Depth testing for 3D
-    pipelineInfo.pColorBlendState = &colorBlendInfo;        // Color blending settings
-    pipelineInfo.pDynamicState = nullptr;                   // No dynamic state for now
+    // Configure dynamic states for viewport and scissor so commands like
+    // vkCmdSetViewport and vkCmdSetScissor can be dynamically invoked in the command buffer
+    // (fixes VUID-vkCmdDrawIndexed-None-08608).
+    std::vector<VkDynamicState> dynamicStates = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+    
+    VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
+    dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+    dynamicStateInfo.pDynamicStates = dynamicStates.data();
+    
+    pipelineInfo.pDynamicState = &dynamicStateInfo;
     
     // Pipeline layout and render pass compatibility
     // The pipeline must be compatible with the render pass it will be used with

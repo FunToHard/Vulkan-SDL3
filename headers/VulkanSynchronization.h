@@ -62,8 +62,16 @@ public:
      * 
      * @param device Logical device to create objects on
      * @param maxFramesInFlight Number of frames that can be processed simultaneously
+     * @param swapchainImageCount Number of swapchain images for per-image presentation semaphores
      */
-    void create(VkDevice device, uint32_t maxFramesInFlight = MAX_FRAMES_IN_FLIGHT);
+    void create(VkDevice device, uint32_t maxFramesInFlight = MAX_FRAMES_IN_FLIGHT, uint32_t swapchainImageCount = 0);
+
+    /**
+     * Recreates presentation semaphores when the swapchain is recreated.
+     * 
+     * @param swapchainImageCount New number of swapchain images
+     */
+    void recreateSwapchainSemaphores(uint32_t swapchainImageCount);
 
     /**
      * Waits for the fence of a specific frame to be signaled.
@@ -218,6 +226,7 @@ private:
     
     // Frame synchronization objects
     std::vector<FrameSyncObjects> m_frameSyncObjects;  // One set per frame in flight
+    std::vector<VkSemaphore> m_renderFinishedSemaphores; // One per swapchain image for safe presentation reuse
     uint32_t m_maxFramesInFlight;                      // Number of frames in flight
     
     // Additional synchronization objects for manual management
