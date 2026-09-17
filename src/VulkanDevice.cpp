@@ -186,15 +186,11 @@ void VulkanDevice::createLogicalDevice(VkSurfaceKHR surface) {
         std::cout << "  - " << extension << "\n";
     }
     
-    // Enable validation layers for the device (if available)
-    // Note: Device-specific validation layers are deprecated in newer Vulkan versions
-    // but we include this for compatibility with older implementations
-    if (ENABLE_VALIDATION_LAYERS) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
-        createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
-    } else {
-        createInfo.enabledLayerCount = 0;
-    }
+    // In modern Vulkan (and explicitly enforced in Vulkan 1.3+ / 1.4 validation layers),
+    // device layers are deprecated and enabledLayerCount MUST be 0 (VUID-VkDeviceCreateInfo-enabledLayerCount-12384).
+    // Layers are only enabled on the VkInstance level.
+    createInfo.enabledLayerCount = 0;
+    createInfo.ppEnabledLayerNames = nullptr;
     
     // Create the logical device
     VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice);
@@ -269,7 +265,8 @@ uint32_t VulkanDevice::scorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR
     constexpr uint32_t POINTS_PER_GB = 10;
     constexpr uint32_t MAX_MEMORY_BONUS = 250;
     
-    uint32_t memoryGB = static_cast<uint32_t>(totalMemory / (1024 * 1024 * 1024));
+    // Round to nearest GB (e.g. 6001 MB -> 6 GB)
+    uint32_t memoryGB = static_cast<uint32_t>((totalMemory + 512ULL * 1024 * 1024) / (1024ULL * 1024 * 1024));
     uint32_t memoryBonus = std::min(memoryGB * POINTS_PER_GB, MAX_MEMORY_BONUS);
     
     // For CPU/software renderers, further cap memory bonus since system RAM is not dedicated VRAM
