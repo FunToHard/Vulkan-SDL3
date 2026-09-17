@@ -93,6 +93,8 @@ void VulkanPipeline::createGraphicsPipeline(VkDevice device,
     pipelineInfo.pRasterizationState = &rasterizationInfo;  // Rasterization settings
     pipelineInfo.pMultisampleState = &multisampleInfo;      // Anti-aliasing settings
     pipelineInfo.pDepthStencilState = &depthStencilInfo;    // Depth testing for 3D
+    pipelineInfo.pColorBlendState = &colorBlendInfo;        // Color blending settings
+    
     // Configure dynamic states for viewport and scissor so commands like
     // vkCmdSetViewport and vkCmdSetScissor can be dynamically invoked in the command buffer
     // (fixes VUID-vkCmdDrawIndexed-None-08608).
