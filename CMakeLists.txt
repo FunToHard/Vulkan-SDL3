@@ -1,83 +1,96 @@
-cmake_minimum_required(VERSION 3.15)
-project(game)
+cmake_minimum_required(VERSION 3.24)
+project(game CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Include directories
-include_directories(${CMAKE_SOURCE_DIR}/headers)
+include(FetchContent)
 
-# Path to SDL
-set(SDL3_DIR ${CMAKE_SOURCE_DIR}/libs/SDL3)
-include_directories(${SDL3_DIR}/include)
+# ---------------------------------------------------------------------------
+# SDL3 Dependency via FetchContent
+# ---------------------------------------------------------------------------
+set(SDL_TEST OFF CACHE BOOL "Disable SDL test suite" FORCE)
+set(SDL_SHARED ON CACHE BOOL "Build SDL shared library" FORCE)
+set(SDL_STATIC OFF CACHE BOOL "Build SDL static library" FORCE)
 
-# Vulkan (assumes Vulkan SDK is installed and environment variable is set)
-find_package(Vulkan REQUIRED)
-include_directories(${Vulkan_INCLUDE_DIRS})
+FetchContent_Declare(
+    SDL3
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+    GIT_TAG        release-3.2.18
+    GIT_SHALLOW    TRUE
+)
 
-# GLM mathematics library
-find_package(glm QUIET)
-if(NOT glm_FOUND)
-    # If GLM is not found via find_package, try to use it as header-only
-    find_path(GLM_INCLUDE_DIR glm/glm.hpp
-        HINTS
-            ${CMAKE_SOURCE_DIR}/libs/glm
-            ${CMAKE_SOURCE_DIR}/external/glm
-            ENV GLM_ROOT
-        PATH_SUFFIXES include
-    )
-    
-    if(GLM_INCLUDE_DIR)
-        message(STATUS "Found GLM: ${GLM_INCLUDE_DIR}")
-        include_directories(${GLM_INCLUDE_DIR})
-    else()
-        message(WARNING "GLM not found. Please install GLM or place it in libs/glm directory")
+# ---------------------------------------------------------------------------
+# GLM Dependency via FetchContent
+# ---------------------------------------------------------------------------
+set(GLM_BUILD_TESTS OFF CACHE BOOL "Disable GLM tests" FORCE)
+
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG        1.0.1
+    GIT_SHALLOW    TRUE
+)
+
+# Populate dependencies
+FetchContent_MakeAvailable(SDL3 glm)
+
+# ---------------------------------------------------------------------------
+# Vulkan SDK
+# ---------------------------------------------------------------------------
+# Auto-detect Vulkan SDK if session environment variable hasn't refreshed yet
+if(WIN32 AND NOT DEFINED ENV{VULKAN_SDK})
+    file(GLOB VULKAN_SDK_DIRS "C:/VulkanSDK/*")
+    if(VULKAN_SDK_DIRS)
+        list(REVERSE VULKAN_SDK_DIRS)
+        list(GET VULKAN_SDK_DIRS 0 LATEST_VULKAN_SDK)
+        set(ENV{VULKAN_SDK} "${LATEST_VULKAN_SDK}")
+        set(Vulkan_ROOT "${LATEST_VULKAN_SDK}")
     endif()
-else()
-    message(STATUS "Found GLM via find_package")
 endif()
 
-# Executable
+find_package(Vulkan REQUIRED)
+
+# Find glslc compiler
+find_program(GLSL_VALIDATOR glslc
+    HINTS
+        ${Vulkan_GLSLC_EXECUTABLE}
+        "$ENV{VULKAN_SDK}/Bin"
+        "$ENV{VULKAN_SDK}/bin"
+        /usr/bin
+        /usr/local/bin
+)
+
+if(NOT GLSL_VALIDATOR)
+    message(FATAL_ERROR "glslc not found! Make sure Vulkan SDK is installed and glslc is in PATH or VULKAN_SDK is set.")
+endif()
+
+# ---------------------------------------------------------------------------
+# Executable Target
+# ---------------------------------------------------------------------------
 file(GLOB SOURCES src/*.cpp)
 add_executable(game ${SOURCES})
 
-# Include headers directory for the target
 target_include_directories(game PRIVATE ${CMAKE_SOURCE_DIR}/headers)
 
-# Link SDL3 and Vulkan
-target_link_libraries(game
-    ${Vulkan_LIBRARIES}
-    ${SDL3_DIR}/lib/x64/SDL3.lib
+target_link_libraries(game PRIVATE
+    SDL3::SDL3
+    glm::glm
+    Vulkan::Vulkan
 )
 
-# Link GLM if found via find_package
-if(TARGET glm::glm)
-    target_link_libraries(game glm::glm)
-endif()
-
-# Shader compilation
-# Find glslc compiler (part of Vulkan SDK)
-find_program(GLSL_VALIDATOR glslc HINTS ${Vulkan_GLSLC_EXECUTABLE} /usr/bin /usr/local/bin ${VULKAN_SDK_PATH}/Bin ${VULKAN_SDK_PATH}/Bin32)
-
-if(NOT GLSL_VALIDATOR)
-    message(FATAL_ERROR "glslc not found! Make sure Vulkan SDK is installed and glslc is in PATH")
-endif()
-
-# Create shaders output directory
+# ---------------------------------------------------------------------------
+# Shader Compilation
+# ---------------------------------------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/shaders)
 
-# Function to compile shaders
 function(add_shader TARGET SHADER)
-    # Get shader name without extension
     get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
     get_filename_component(SHADER_EXT ${SHADER} EXT)
-    
-    # Remove the dot from extension for output naming
     string(SUBSTRING ${SHADER_EXT} 1 -1 SHADER_EXT_NO_DOT)
     
-    # Set output file path
     set(SHADER_OUTPUT ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.${SHADER_EXT_NO_DOT}.spv)
     
-    # Add custom command to compile shader
     add_custom_command(
         OUTPUT ${SHADER_OUTPUT}
         COMMAND ${GLSL_VALIDATOR} ${CMAKE_SOURCE_DIR}/shaders/${SHADER} -o ${SHADER_OUTPUT}
@@ -85,17 +98,40 @@ function(add_shader TARGET SHADER)
         COMMENT "Compiling shader ${SHADER} to SPIR-V"
     )
     
-    # Add the compiled shader as a dependency of the target
     target_sources(${TARGET} PRIVATE ${SHADER_OUTPUT})
 endfunction()
 
-# Compile shaders
 add_shader(game vertex.vert)
 add_shader(game fragment.frag)
 
-# DLLs for runtime (optional, for dev convenience)
+# ---------------------------------------------------------------------------
+# Post-build: Copy DLLs, Shaders, and Assets
+# ---------------------------------------------------------------------------
+# Copy runtime DLLs (e.g. SDL3.dll) next to the executable
+if(WIN32)
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:game>
+            $<TARGET_FILE_DIR:game>
+        COMMAND_EXPAND_LISTS
+    )
+endif()
+
+# Copy compiled shaders to the target directory
 add_custom_command(TARGET game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:game>/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${SDL3_DIR}/lib/x64/SDL3.dll
-        $<TARGET_FILE_DIR:game>
+        ${CMAKE_BINARY_DIR}/shaders/vertex.vert.spv
+        ${CMAKE_BINARY_DIR}/shaders/fragment.frag.spv
+        $<TARGET_FILE_DIR:game>/shaders/
 )
+
+# Copy assets to the target directory if they exist
+if(EXISTS ${CMAKE_SOURCE_DIR}/assets)
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:game>/assets
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:game>/assets
+    )
+endif()

@@ -1,0 +1,43 @@
+# Prerequisites & build directories
+build/
+bin/
+out/
+.cache/
+
+# CMake outputs and presets
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CMakeUserPresets.json
+
+# Visual Studio / MSVC artifacts
+.vs/
+*.sln.docstates
+*.user
+*.suo
+*.db
+*.opendb
+
+# IDEs
+.vscode/
+.idea/
+
+# Compiled objects, binaries, and symbols
+*.obj
+*.o
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+*.exe
+*.pdb
+*.ilk
+*.idb
+*.exp
+
+# Compiled SPIR-V shaders
+*.spv
+
+# Third-party dependencies (fetched via CMake FetchContent)
+/libs/

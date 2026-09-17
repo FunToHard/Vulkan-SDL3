@@ -44,16 +44,13 @@ A Vulkan + SDL3 C++ example project demonstrating basic graphics API integration
 ## Project Structure
 
 ```
-Echo Protocol/
+Vulkan-SDL3/
 ├── src/                    # Source files
-│   └── main.cpp           # Main application entry point
-├── headers/               # Header files
-│   ├── Common.h          # Shared definitions and includes
-│   └── VulkanPipeline.h  # Vulkan pipeline management
-├── libs/                  # Third-party libraries
-│   └── SDL3/             # SDL3 library files
-├── CMakeLists.txt        # CMake configuration
-└── README.md            # This file
+├── headers/                # Header files
+├── assets/                 # Mesh and asset files
+├── shaders/                # GLSL shader source files
+├── CMakeLists.txt         # CMake configuration (fetches SDL3 & GLM via FetchContent)
+└── README.md              # This file
 ```
 
 ## Usage
