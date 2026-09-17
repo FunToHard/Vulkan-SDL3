@@ -9,6 +9,7 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 CMakeUserPresets.json
+compile_commands.json
 
 # Visual Studio / MSVC artifacts
 .vs/
