@@ -224,6 +224,11 @@ uint32_t VulkanDevice::scorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR
     } else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
         score += 500;
         std::cout << "  - Integrated GPU bonus: +500 points\n";
+    } else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
+        score += 250;
+        std::cout << "  - Virtual GPU bonus: +250 points\n";
+    } else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+        std::cout << "  - CPU / Software renderer (no hardware GPU bonus)\n";
     }
     
     // Maximum possible size of textures affects graphics quality
@@ -258,10 +263,26 @@ uint32_t VulkanDevice::scorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR
         }
     }
     
-    // Add points based on available VRAM (in GB)
+    // Add points based on available VRAM (in GB).
+    // Cap memory bonus to prevent CPU / software renderers (e.g. llvmpipe) with large system RAM
+    // from outscoring dedicated graphics cards (fixes GitHub issue #1).
+    constexpr uint32_t POINTS_PER_GB = 10;
+    constexpr uint32_t MAX_MEMORY_BONUS = 250;
+    
     uint32_t memoryGB = static_cast<uint32_t>(totalMemory / (1024 * 1024 * 1024));
-    score += memoryGB * 10;
-    std::cout << "  - Device memory (" << memoryGB << " GB): +" << (memoryGB * 10) << " points\n";
+    uint32_t memoryBonus = std::min(memoryGB * POINTS_PER_GB, MAX_MEMORY_BONUS);
+    
+    // For CPU/software renderers, further cap memory bonus since system RAM is not dedicated VRAM
+    if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+        memoryBonus = std::min(memoryBonus, 50u);
+    }
+    
+    score += memoryBonus;
+    std::cout << "  - Device memory (" << memoryGB << " GB): +" << memoryBonus << " points";
+    if (memoryGB * POINTS_PER_GB > memoryBonus) {
+        std::cout << " (capped)";
+    }
+    std::cout << "\n";
     
     return score;
 }
